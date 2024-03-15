@@ -22,6 +22,8 @@ from napcountrysearch import get_country
 bad_request_errors_global=0
 bad_request_errors_global_previous=0
 
+slow_global=False
+
 # Подпрограма за проверка дали даден елемент със зададено ID съществува.
 # Подпрограмата чака time секунди да види дали този елемент ще се появи.
 
@@ -245,6 +247,7 @@ def click_submit_part_button(driver):
     try:
         confirm_button_xpath = "//form[@name='submitFrm']//input[@type='button' and contains(@onclick, 'SubmitPart')]"
         
+        time.sleep(0.5) # in case JS did not finished updating the yellow fields
         # Click the confirm button
         confirm_button = WebDriverWait(driver, 10).until(
             EC.element_to_be_clickable((By.XPATH, confirm_button_xpath))
@@ -431,7 +434,7 @@ def fill_dropdown_menu(driver, field_id, value, retry_attempts=10):
                     if user_input == "stop":
                         raise SystemExit("Script stopped because of user confirmation to stop.")
 
-            time.sleep(1)
+            #time.sleep(1)
             # Scroll the element into view, aligning it to the center of the viewport
             driver.execute_script("arguments[0].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });", dropdown_element)
 
@@ -447,21 +450,30 @@ def fill_dropdown_menu(driver, field_id, value, retry_attempts=10):
             
             time.sleep(0.1)
 
+            if slow_global:
+                time.sleep(1)
+
+            if attempt > 3:
+                time.sleep(0.5)
+
             # Wait for the dropdown options to become visible
             WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.ID, field_id)))
 
             #input("DEBUG: fill_dropdobwn_menu - press ENTER to continiue. Checkpoint 2.")
 
-            time.sleep(1)
+            if attempt > 3:
+                time.sleep(0.5)
                     
             # Select the value from the dropdown
             select = Select(driver.find_element(By.ID, field_id))
             select.select_by_value(value)
 
-            time.sleep(1)        
+            if attempt > 3:
+                time.sleep(0.5)
+            
             #driver.execute_script("arguments[0].blur();", select)
 
-            select_element = driver.find_element(By.ID, field_id)
+            #select_element = driver.find_element(By.ID, field_id)
 
             # select_element.send_keys(Keys.TAB)
             #actions = ActionChains(driver)
@@ -474,14 +486,20 @@ def fill_dropdown_menu(driver, field_id, value, retry_attempts=10):
             
             print(f"Value '{value}' selected in dropdown '{field_id}'.")
 
-            time.sleep(1)
+            time.sleep(0.1)
+
+            if attempt > 3:
+                time.sleep(0.5)
+
+            if slow_global:
+                time.sleep(0.5)
 
             # Check if the selected value matches the expected value
-            if select.first_selected_option.get_attribute("value") != value:
+            if select.first_selected_option.get_attribute("value") == value:
+                return True
+            else:
                 print(f"Error: Selected value '{select.first_selected_option.get_attribute('value')}' doesn't match the expected value '{value}'.")
-                return False
-
-            return True
+                continue
 
         except TimeoutException:
             print(f"Error: Timeout while waiting for the dropdown options in '{field_id}' to appear.")
@@ -1004,13 +1022,7 @@ def create_row(driver, table_type):
 
     return False
     
-    
 
-def fill_input_v1(driver, element_id, value):
-    # Function to fill input field with value
-    input_field = driver.find_element(By.ID, element_id)
-    input_field.clear()
-    input_field.send_keys(value)
 
 def mathematically_equal(num1, num_string):
     if num_string == "":
@@ -1040,6 +1052,8 @@ def fill_input(driver, element_id, value, input_type="string", retry_attempts=20
         print("Error: Invalid input_type. Defaulting to 'string'.")
         input_type = "string"
 
+    global slow_global
+
     attempt=0
     while True:
         attempt += 1
@@ -1054,7 +1068,7 @@ def fill_input(driver, element_id, value, input_type="string", retry_attempts=20
             else:
                 print(f"Error: Function fill_input failed to find element_id '{element_id}' at attempt {attempt}.")
             continue
-            
+
         if input_type == "string":
             if input_field.get_attribute("value") == str(value):
                 if attempt == 1:
@@ -1090,22 +1104,24 @@ def fill_input(driver, element_id, value, input_type="string", retry_attempts=20
                     if user_input == "stop":
                         raise SystemExit("Script stopped because of user confirmation to stop.")
 
-
             if attempt > 1:
                 print(f"In fill_input: Retry attempt {attempt}... (element_id:{element_id})")
-                time.sleep(1.5)  # Delay before each retry attempt
+                time.sleep(1)  # Delay before each retry attempt
                 if attempt > 5:
                     time.sleep(3)
-            
-
-
 
             try:
                 driver.execute_script("arguments[0].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });", input_field)
-                time.sleep(1)
+                if attempt > 3:
+                    time.sleep(1)
+                elif slow_global:
+                    time.sleep(1)
+                else:
+                    time.sleep(0.1)
             except Exception as e:
                 print(f"Error scrollIntoView input_field (element_id: {element_id}, attempt {attempt}): {e}")
                 time.sleep(1)
+
 
             #time.sleep(0.1)
 
@@ -1119,17 +1135,38 @@ def fill_input(driver, element_id, value, input_type="string", retry_attempts=20
             # alterantive:
             actions = ActionChains(driver)
 
-            if (attempt > 8) and (attempt < 15):
-                fill_input_v1(driver, element_id, value)
-                time.sleep(2)
+            if (attempt > 12) and (attempt < 15):
+                input_field.clear()
+                input_field.send_keys(value)
+                time.sleep(0.5)
+                input_field.send_keys(Keys.TAB)                
+
+                if slow_global:
+                    time.sleep(0.5)
+
+                time.sleep(0.5)
+            elif attempt < 3:
+                driver.execute_script("arguments[0].value = arguments[1];", input_field, value)
+                if slow_global:
+                    time.sleep(1)
+                ActionChains(driver).click(input_field).perform()
+                ActionChains(driver).send_keys(Keys.TAB).perform()
+
+                if slow_global:
+                    time.sleep(0.5)
             else:
                 # Clear the input field
                 actions.click(input_field).send_keys(Keys.CONTROL + "a").send_keys(Keys.DELETE)
                 actions.click(input_field).send_keys(str(value))
                 time.sleep(0.2) # just in case
+                if slow_global:
+                    time.sleep(0.2)
                 actions.perform()
             
                 time.sleep(0.2)  # Delay after sending keys
+
+                if slow_global:
+                    time.sleep(0.2)
 
                 # input_field.send_keys(Keys.TAB)  # Move focus out of the input field
                 # alternative
@@ -1137,6 +1174,8 @@ def fill_input(driver, element_id, value, input_type="string", retry_attempts=20
 
                 time.sleep(0.2)  # Delay after sending keys
 
+                if slow_global:
+                    time.sleep(0.3)
 
         except Exception as e:
             print(f"Error in fill_input: {e}")
@@ -1246,28 +1285,104 @@ def select_country(driver, row_id, country_input):
         print("select_country_v3 failed, we try select_country_v2...")
         return select_country_v2(driver, row_id, country_input)
 
-
-
-def fill_date(driver, date_field_id, date_value_hidden):
-    # Function to fill date value in a hidden input field
-    try:
-        # Check if the date is valid
-        try:
-            year, month, day = map(int, date_value_hidden.split('-'))
-            datetime.datetime(year, month, day)
-        except ValueError:
-            print(f"Error: Invalid date value '{date_value_hidden}'. Skipping filling date field '{date_field_id}'.")
+def fill_date_print_error_processing_date_and_ask():
+    print(" * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *")
+    print(f"fill_date: Error processing the date.")
+    print("This is unusual. So we requre user confirmation to continue.")
+    print("Грешка при обработка на датата.")
+    print("Това е необичайно. Потвърждение за продължаването на скрипта се изисква.")
+    print("Type \"stop\" and press Enter to stop the program. Напишете \"стоп\" и натиснете Enter за да спрете скрипта.")
+    print("Or to continue (without filling the date): Или за да продължим (без да въвеждаме датата):")
+    while True:
+        user_input = input("Press Enter to continue. Натиснете Enter за да продължим.")
+        if user_input == "":
             return False
+        if user_input == "стоп":
+            raise SystemExit("Скриптът спря, защото потребителят потвърди, че иска да спре.")
+        if user_input == "stop":
+            raise SystemExit("Script stopped because of user confirmation to stop.")
 
-        # Find the hidden input field by appending "_acquiredate" to the date_field_id
-        hidden_date_field = driver.find_element(By.ID, date_field_id)
-        driver.execute_script(f"arguments[0].setAttribute('value', '{date_value_hidden}')", hidden_date_field)
-        #print(f"Hidden date field '{date_field_id}' filled with value '{date_value_hidden}'.")
-        return True
-    except NoSuchElementException:
-        print(f"Error: Date field '{date_field_id}' not found.")
-    except TimeoutException:
-        print(f"Error: Timeout while waiting for date field '{date_field_id}' to be clickable.")
+
+def fill_date(driver, date_field_id, date_value, retry_attempts=20):
+    # Function to fill date value in a hidden input field
+
+    # Check if the date is valid
+    try:
+        date_value_hidden = convert_to_yyyy_mm_dd(date_value)  # Convert to "YYYY-MM-DD"
+        year, month, day = map(int, date_value_hidden.split('-'))
+        datetime.datetime(year, month, day)
+    except ValueError:
+        print(f"Error: Invalid date value '{date_value_hidden}'. Skipping filling date field '{date_field_id}'.")
+        print(f"Грешка: невалидна дата.")
+        return fill_date_print_error_processing_date_and_ask()
+    except Exception as e:
+        print(f"Error in fill_input: {e}")
+        return fill_date_print_error_processing_date_and_ask()
+
+    attempt=0
+    while True:
+        attempt += 1
+
+        print(f"DEBUG: fill_date: attempt: \"{attempt}\",  date_field_id: \"{date_field_id}\", date_value_hidden: \"{date_value_hidden}\"")
+
+        try:
+
+            try:
+                hidden_date_field = driver.find_element(By.ID, date_field_id)
+            except NoSuchElementException:
+                print(f"Error: Date field '{date_field_id}' not found.")
+            except Exception as e:
+                print(f"Error in fill_date (trying to find the element with ID '{date_field_id}'): {e}")
+            
+            if hidden_date_field.get_attribute("value") == str(date_value_hidden):
+                if attempt == 1:
+                    print("fill_date: The input field \"{fill_date}\" is already with the same string value \"{date_value_hidden}\", we don't touch it.")
+                else:
+                    print(f"fill_date: String value \"{date_value_hidden}\" successfully entered in \"{date_field_id}\".")
+
+                return True
+
+            if attempt > retry_attempts:
+                print("")
+                print(" * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *")
+                print(f"fill_date: All attempts failed. DEBUG: retry_attempts: {retry_attempts} attempt: {attempt}")
+                print("This is unusual. So we requre user confirmation to continue.")
+                print("Това е необичайно. Потвърждение за продължаването на скрипта се изисква.")
+                print(f"We tried to enter in \"{date_field_id}\" the value \"{date_value_hidden}\".")
+                print(f"Опитахме се да въведем в \"{date_field_id}\" стойността \"{date_value_hidden}\".")
+                print("Type \"stop\" and press Enter to stop the program. Напишете \"стоп\" и натиснете Enter за да спрете скрипта.")
+                print("Or to continue trying again: Или за следващ опит:")
+                while True:
+                    user_input = input("Press Enter to try again. Натиснете Enter за да опитаме пак.")
+                    if user_input == "":
+                        break
+                    if user_input == "стоп":
+                        raise SystemExit("Скриптът спря, защото потребителят потвърди, че иска да спре.")
+                    if user_input == "stop":
+                        raise SystemExit("Script stopped because of user confirmation to stop.")
+            elif attempt > 5:
+                time.sleep(1)
+
+            try:
+                date_field_id_visible = f"{date_field_id}_display"
+                visible_date_field = driver.find_element(By.ID, date_field_id_visible)
+                driver.execute_script("arguments[0].value = arguments[1];", visible_date_field, date_value)
+                print(f"fill_date: Visible date field '{date_field_id_visible}' filled with value '{date_value}'.")
+            except Exception as e:
+                print(f"Error in fill_date (trying to fill the visible date): {e}")
+                time.sleep(1)
+
+            try:
+                driver.execute_script(f"arguments[0].setAttribute('value', '{date_value_hidden}')", hidden_date_field)
+                print(f"fill_date: Hidden date field '{date_field_id}' filled with value '{date_value_hidden}'.")
+            except Exception as e:
+                print(f"Error in fill_date (trying to fill the visible date): {e}")
+                time.sleep(1)
+
+        except Exception as e:
+            print(f"Error in fill_date: {e}")
+
+        time.sleep(0.5)
 
     return False
 
@@ -1316,7 +1431,7 @@ def process_csv_data_owned(driver, csv_file, table_type):
                     print("Error: Invalid table type.")
                     return
 
-                print("Debug (process_csv_data_owned): current_row_id: ", current_row_id)
+                #print("Debug (process_csv_data_owned): current_row_id: ", current_row_id)
                 
                 if not check_if_row_exists(driver, current_row_id):
                     if not create_row(driver, table_type):
@@ -1368,7 +1483,7 @@ def process_csv_data_owned(driver, csv_file, table_type):
                     
                     if "date" in row_data:
                         # Fill hidden date field if date is present in the csv file
-                        hidden_date_value = convert_to_yyyy_mm_dd(row_data["date"])  # Convert to "YYYY-MM-DD"
+                        hidden_date_value = row_data["date"]
                         acquiredate_id = f"{current_row_id}_acquiredate"
                         fill_date(driver, acquiredate_id, hidden_date_value)
                     
@@ -1401,7 +1516,7 @@ def process_csv_data_dividends(driver, csv_file):
 
             while True:
                 current_row_id = f"A8D5:{row_id}"
-                print("Debug (process_csv_data_dividends): current_row_id: ", current_row_id)
+                #print("Debug (process_csv_data_dividends): current_row_id: ", current_row_id)
 
                 if not check_if_row_exists(driver, current_row_id):
                     if not create_row(driver, "dividends"):
@@ -2651,7 +2766,12 @@ def check_bad_request_increase(stage="middle"):
 
         bad_request_errors_global_previous = bad_request_errors_global
 
-def autopilot():
+def autopilot(mode="fast"):
+
+    global slow_global
+
+    if mode == "slow":
+        slow_global = True
 
     global bad_request_errors_global_previous
     global bad_request_errors_global

@@ -102,7 +102,9 @@
 
 ## Инсталиране
 
-* Инсталирайте Python 3.
+* Инсталирайте Python 3
+  * Потребителите на Windows изтеглят инсталационния файл от [тук](https://www.python.org/downloads/windows/).
+  * Потребителите на Linux ползват специфичния начин за тяхната дистрибуция - например `sudo apt install python3`.
 * Изтеглете архив на това хранилище (например от Code -> Download zip или [директно от този линк](https://github.com/vstoykovbg/nap-autopilot/archive/refs/heads/main.zip)) и го  разархивирайте.
 * Инсталирайте изискваните модули от requirements.txt:
   * Потребителите на Windows може да цъкнат на install_requirements.bat, което изпълнява командата `pip install requirements.txt`.

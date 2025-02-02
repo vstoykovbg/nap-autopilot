@@ -7,7 +7,7 @@ from napcountrydb import valid_countries
 valid_country_data_short = {
     'Ирландия': ['IE', 'IRL', 'Ireland'],
     'Австралия': ['AU', 'AUS', 'Australia'],
-    'Великобритания': ['GB', 'GBR', 'United Kingdom', 'Great Britain', 'Британия', 'ЮК', 'Острова', 'Кралството'],
+    'Великобритания': ['GB', 'GBR', 'United Kingdom', 'Great Britain', 'Британия', 'ЮК', 'Острова', 'Кралството', 'UK'],
     'САЩ': ['US', 'USA', 'United States of America', 'Съединени Американски Щати', 'Съединените Американски Щати', 'Щатите', 'США', 'Съединените Щати', 'Съединени Щати' ],
     'Нидерландия (Холандия)': ['NL', 'NLD', 'Kingdom of the Netherlands','Нидерландия', 'Холандия'],
     'Остров Ман': ['IM', 'IMN', 'Isle of Man', 'Ман'],

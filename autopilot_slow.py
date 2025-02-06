@@ -2,6 +2,6 @@
 
 import napmodule
 
-napmodule.autopilot("slow")
+napmodule.autopilot(mode="slow")
 
 

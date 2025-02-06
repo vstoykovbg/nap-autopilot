@@ -193,13 +193,15 @@ def get_supplement_id(supplement_number):
 
   if isinstance(supplement_number, int):
     if 1 <= supplement_number <= 13:
-      return f"part_{1159 + supplement_number}"
+      # return f"part_{1159 + supplement_number}" # през 2024 година работеше
+      return f"part_{1224 + supplement_number}" # корекция за 2025 година
     else:
       raise ValueError(f"Integer supplement number {supplement_number} is out of range (must be between 1 and 13)")
   elif isinstance(supplement_number, str):
     if supplement_number.upper() in ["III", "IV", "V"]:
       roman_to_int = {"III": 3, "IV": 4, "V": 5}
-      return f"part_{1154 + roman_to_int[supplement_number.upper()]}"
+      # return f"part_{1154 + roman_to_int[supplement_number.upper()]}"  # през 2024 година работеше
+      return f"part_{1219 + roman_to_int[supplement_number.upper()]}"  # през 2024 година работеше
     else:
       raise ValueError(f"Roman numeral supplement number '{supplement_number}' is invalid (must be one of 'III', 'IV', or 'V')")
   else:
@@ -812,7 +814,7 @@ def fill_sales_code_v2(driver, row_id):
 
 
 
-def fill_sales_code(driver, row_id):
+def fill_sales_code(driver, row_id, sales_code="508"):
     # Function to select the income code from the dropdown menu
     code_id = f"{row_id}_code"
     print(f"DEBUG: fill_sales_code is invoked. code_id is \"{code_id}\"")
@@ -868,7 +870,7 @@ def fill_sales_code(driver, row_id):
             print(f"Error scrollIntoView code_element in fill_sales_code: {e}")
         
         # code_select.select_by_value("508")
-        fill_dropdown_menu(driver, code_id, "508")
+        fill_dropdown_menu(driver, code_id, sales_code)
 
         if row_id.endswith(":1"):
             print("DEBUG: row_id.endswith LINE 3")
@@ -1611,7 +1613,7 @@ def process_csv_data_dividends(driver, csv_file):
                 row_id += 1  # Move to the next row if current row is full
 
 
-def process_csv_data_sales(driver, csv_file):
+def process_csv_data_sales(driver, csv_file, sales_code="508"):
     with open(csv_file, newline='', encoding='utf-8') as csvfile:
         csvreader = csv.DictReader(csvfile)
         for row_data in csvreader:
@@ -1660,7 +1662,7 @@ def process_csv_data_sales(driver, csv_file):
                             print("Values are too small. Buy, sell values: ", buyvalue_value, "," , sellvalue_value)
                             break  # Move to the next line if both buy and sell values are too small
 
-                        fill_sales_code(driver, current_row_id)
+                        fill_sales_code(driver, current_row_id, sales_code)
 
                         fill_input(driver, f"{current_row_id}_sellvalue", str(rounded_sellvalue_value), "numerical")
                         fill_input(driver, f"{current_row_id}_buyvalue", str(rounded_buyvalue_value), "numerical")
@@ -1732,7 +1734,7 @@ def process_csv_data_sales(driver, csv_file):
                             break # Move to the next line if the values are not mathematically sound.
 
 
-                        fill_sales_code(driver, current_row_id)
+                        fill_sales_code(driver, current_row_id, sales_code)
 
                         fill_input(driver, f"{current_row_id}_sellvalue", str(rounded_sellvalue_value), "numerical")
                         fill_input(driver, f"{current_row_id}_buyvalue", str(rounded_buyvalue_value), "numerical")
@@ -1757,18 +1759,19 @@ def categorize_csv_files(directory):
         directory (str): Path to the directory containing the CSV files.
 
     Returns:
-        tuple: A tuple containing lists of CSV files categorized as shares, stocks, dividends, sales, and other.
+        tuple: A tuple containing lists of CSV files categorized as shares, stocks, dividends, sales, crypto and other.
     """
     # Check if the directory exists
     if not os.path.exists(directory):
         print(f"The directory '{directory}' does not exist.")
-        return None, None, None, None, None
+        return None, None, None, None, None, None
 
     # Initialize empty dictionaries to store file types
     shares_files = {}
     stocks_files = {}
     dividends_files = {}
     sales_files = {}
+    crypto_files = {}
     other_files = {}
 
     # Iterate through files in the directory
@@ -1792,13 +1795,19 @@ def categorize_csv_files(directory):
                     elif "name" in headers and "country" in headers and "sum" in headers:
                         dividends_files[filename] = file_path
                     elif "sellvalue" in headers and "buyvalue" in headers and "profit" in headers and "loss" in headers:
-                        sales_files[filename] = file_path
+                    
+                        filename = os.path.basename(file_path)
+
+                        if "crypto" in filename:
+                            crypto_files[filename] = file_path
+                        else:
+                            sales_files[filename] = file_path
                     else:
                         other_files[filename] = file_path
                 else: # a file without header is also considered other
                     other_files[filename] = file_path
                 
-    return shares_files, stocks_files, dividends_files, sales_files, other_files
+    return shares_files, stocks_files, dividends_files, sales_files, crypto_files, other_files
 
 
 
@@ -1825,13 +1834,14 @@ def validate_csv_files(directory):
     """
     try:
         # Categorize the CSV files
-        shares, stocks, dividends, sales, other = categorize_csv_files(directory)
+        shares, stocks, dividends, sales, crypto, other = categorize_csv_files(directory)
 
         print("DEBUG: all found files from categorize_csv_files(directory):")
         print("shares:", shares)
         print("stocks:", stocks)
         print("dividends:", dividends)
         print("sales:", sales)
+        print("crypto:", crypto)
         print("other:", other)
 
         errors = []
@@ -1856,6 +1866,12 @@ def validate_csv_files(directory):
                 errors.extend(validate_csv_files_sales(sales))
                 if len(sales) > 1:
                     errors.append("More than one CSV file with sales data found in the directory.")
+
+            # Validate crypto CSV files if they exist
+            if sales:
+                errors.extend(validate_csv_files_sales(crypto))
+                if len(crypto) > 1:
+                    errors.append("More than one CSV file with crypto sales data found in the directory.")
 
 
         # Check if other files are present
@@ -2284,8 +2300,8 @@ def we_are_somewhere_in_the_yearly_declaration_v1(driver):
 
     return False
 
-
-def we_are_somewhere_in_the_yearly_declaration(driver):
+# работеше през 2024 година
+def we_are_somewhere_in_the_yearly_declaration_v2(driver):
     # List of IDs to search for
     ids_to_search = ['atdec_instructions', 'decContainer', 'part_1157']
 
@@ -2304,6 +2320,24 @@ def we_are_somewhere_in_the_yearly_declaration(driver):
         print(f"Error in we_are_somewhere_in_the_yearly_declaration: {e}")
         return False
         
+
+# v3 - корекция за 2025 година
+def we_are_somewhere_in_the_yearly_declaration(driver):
+
+    # Wait for the elements to appear within 10 seconds
+    try:
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, 'atdec_instructions')) and
+            EC.presence_of_element_located((By.ID, 'decContainer')) and
+            EC.presence_of_element_located((By.ID, 'part_1221'))
+        )
+        return True
+    except TimeoutException:
+        print("we_are_somewhere_in_the_yearly_declaration: Timed out waiting for elements to appear.")
+        return False
+    except Exception as e:
+        print(f"Error in we_are_somewhere_in_the_yearly_declaration: {e}")
+        return False
 
 
 def enable_supplement_and_go(driver, supplement):
@@ -2689,7 +2723,9 @@ def navigate_and_process(driver, file_path, category):
         process_csv_data_dividends(driver, file_path)
     elif category == "sales":
         enable_supplement_and_go_with_retries(driver, 5)
-        process_csv_data_sales(driver, file_path)
+        process_csv_data_sales(driver, file_path, sales_code="508")
+    elif category == "crypto":
+        process_csv_data_sales(driver, file_path, sales_code="5082")
     else:
         raise("Error in navigate_and_process: Invalid category.")
 
@@ -2766,7 +2802,7 @@ def check_bad_request_increase(stage="middle"):
 
         bad_request_errors_global_previous = bad_request_errors_global
 
-def autopilot(mode="fast"):
+def autopilot(mode="fast",browser="firefox"):
 
     global slow_global
 
@@ -2793,9 +2829,13 @@ def autopilot(mode="fast"):
         else:
             print("You did not wrote \"kamikadze\" so we stop.")
             return
-   
-    driver = create_firefox_driver()
-    
+
+    if browser == "firefox":
+        driver = create_firefox_driver()
+    elif browser == "chrome":
+        driver = webdriver.Chrome()
+        
+            
     if driver == None:
         raise("Can't create Firefox driver.")
 
@@ -2825,15 +2865,15 @@ def autopilot(mode="fast"):
 
 
     # Categorize the CSV files
-    shares, stocks, dividends, sales, other = categorize_csv_files(directory)
+    shares, stocks, dividends, sales, crypto, other = categorize_csv_files(directory)
 
     print("DEBUG: all found files from categorize_csv_files(directory):")
     print("shares:", shares)
     print("stocks:", stocks)
     print("dividends:", dividends)
     print("sales:", sales)
+    print("crypto:", crypto)
     print("other:", other)
-
 
 
     # process shares
@@ -2885,6 +2925,19 @@ def autopilot(mode="fast"):
         print(f"An error occurred while processing sales: {e}")
         print("Грешка при обработка на информацията за продажбите.")
         press_enter_to_continue()
+
+
+    # process crypto
+    try:
+        for file_name, file_path in crypto.items():
+            print(f"Processing {file_path}")
+            navigate_and_process(driver, file_path,"crypto")
+
+    except Exception as e:
+        print(f"An error occurred while processing crypto sales: {e}")
+        print("Грешка при обработка на информацията за продажбите на криптовалути.")
+        press_enter_to_continue()
+
 
     check_bad_request_increase("final")
 

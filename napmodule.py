@@ -2716,7 +2716,7 @@ def autopilot_navigation_mode_1(driver):
                     print("Failed to go to the tax declaration.")
 
 def too_many_attempts_press_enter():
-    print("Too many atempts. Прекалено много опити.")
+    print("Too many attempts. Прекалено много опити.")
     print("Натиснете Enter за да продължим с опитите.")
     print("If the portal is not working wait and go to the yearly declaration.")
     print("Ако порталът не работи изчакайте и след като заработи (преди да натиснете Enter) отидете в годишната данъчна декларация.")

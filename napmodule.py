@@ -735,6 +735,54 @@ def click_and_check_messenger_hide(driver):
 
     return True
 
+def is_message_no_data_present(driver):
+    """Check if the specific message box about no data exists on the page."""
+    try:
+        # Find the dialog by class name
+        # dialog = driver.find_element(By.CLASS_NAME, "ui-dialog")
+
+        # Wait for up to 5 seconds for the dialog to appear
+        dialog = WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "ui-dialog"))
+        )
+        
+        # Check for the title containing "Съобщение"
+        title_element = dialog.find_element(By.CLASS_NAME, "ui-dialog-title")
+        if "Съобщение" not in title_element.text:
+            return False
+        
+        # Check for the specific message text in the body
+        message_body = dialog.find_element(By.CLASS_NAME, "ui-dialog-content")
+        if "Към настоящия момент в НАП няма постъпили данни от" not in message_body.text:
+            return False
+        
+        # Check if the close button with class "ui-dialog-titlebar-close" exists
+        close_button = dialog.find_elements(By.CLASS_NAME, "ui-dialog-titlebar-close")
+        if not close_button:
+            return False
+        
+        return True
+    except Exception:
+        return False
+
+def close_message_no_data(driver):
+    """Close the message box about no data if it exists."""
+    if not is_message_no_data_present(driver):
+        print("Message about no data from employers or income payers not found.")
+        return False
+    
+    try:
+        # Locate the close button within the dialog
+        close_button = driver.find_element(By.CLASS_NAME, "ui-dialog-titlebar-close")
+        driver.execute_script("arguments[0].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });", close_button)
+        time.sleep(1)
+        close_button.click()
+        print("Message about no data from employers or income payers closed successfully.")
+        return True
+    except Exception as e:
+        print(f"Error closing the message: {e}")
+        return False
+
 
 def fill_sales_code_v1(driver, row_id):
     # Function to select the income code from the dropdown menu
@@ -1846,7 +1894,7 @@ def validate_csv_files(directory):
 
         errors = []
 
-        if not any([shares, stocks, dividends, sales]):
+        if not any([shares, stocks, dividends, sales, crypto]):
             errors.append("No useful CSV files found in the directory.")
         else:
 
@@ -1868,7 +1916,7 @@ def validate_csv_files(directory):
                     errors.append("More than one CSV file with sales data found in the directory.")
 
             # Validate crypto CSV files if they exist
-            if sales:
+            if crypto:
                 errors.extend(validate_csv_files_sales(crypto))
                 if len(crypto) > 1:
                     errors.append("More than one CSV file with crypto sales data found in the directory.")
@@ -2725,6 +2773,7 @@ def navigate_and_process(driver, file_path, category):
         enable_supplement_and_go_with_retries(driver, 5)
         process_csv_data_sales(driver, file_path, sales_code="508")
     elif category == "crypto":
+        enable_supplement_and_go_with_retries(driver, 5)
         process_csv_data_sales(driver, file_path, sales_code="5082")
     else:
         raise("Error in navigate_and_process: Invalid category.")
@@ -2842,6 +2891,8 @@ def autopilot(mode="fast",browser="firefox"):
 
     autopilot_navigation_mode_1(driver)
 
+    print("Checking if the message about no data from employers or income payers exists...")
+    close_message_no_data(driver)
 
     bad_request_errors_global_previous = bad_request_errors_global
 

@@ -2023,18 +2023,33 @@ def validate_csv_files_sales(files):
                         else:
                             errors.append(f"Missing value for '{field}' field at line {row_num} in {file_path}")
 
-                    # Use the Decimal values in validation logic
-                    if field_decimal_values.get('profit') is not None and field_decimal_values.get('sellvalue') is not None and field_decimal_values['profit'] > 0 and field_decimal_values['sellvalue'] <= 0:
+                    profit = field_decimal_values.get('profit') or Decimal('0')
+                    sellvalue = field_decimal_values.get('sellvalue') or Decimal('0')
+                    buyvalue = field_decimal_values.get('buyvalue') or Decimal('0')
+                    loss = field_decimal_values.get('loss') or Decimal('0')
+
+                    if profit > 0 and sellvalue <= 0:
                         errors.append(f"Profit is positive but sellvalue is not positive at line {row_num} in {file_path}")
-                    if field_decimal_values.get('profit') is not None and field_decimal_values['profit'] <= 0 and field_decimal_values.get('sellvalue') is not None and field_decimal_values['sellvalue'] > 0:
-                        errors.append(f"Profit is not positive but sellvalue is positive at line {row_num} in {file_path}")
-                    if field_decimal_values.get('profit') is not None and field_decimal_values.get('sellvalue') is not None and field_decimal_values.get('buyvalue') is not None and field_decimal_values['profit'] > 0 and field_decimal_values['sellvalue'] > 0 and field_decimal_values['buyvalue'] > field_decimal_values['sellvalue']:
-                        errors.append(f"Profit is positive but buyvalue is greater than sellvalue at line {row_num} in {file_path}")
+
+                    if (
+                        profit <= 0 and
+                        sellvalue > buyvalue
+                    ):
+                        errors.append(f"Sellvalue is greater than buyvalue, but profit is not positive at line {row_num} in {file_path}")
+
+                    if (
+                        loss <= 0 and
+                        buyvalue > sellvalue
+                    ):
+                        errors.append(f"Buyvalue is greater than sellvalue, but loss is not positive at line {row_num} in {file_path}")
+
+
+                    if profit > 0 and sellvalue > 0 and buyvalue > sellvalue:
+                        errors.append(f"Profit is positive and sellvalue is positive but buyvalue is greater than sellvalue at line {row_num} in {file_path}")
 
                     # New validation rule: (sellvalue - buyvalue) should be equal to (profit - loss)
-                    if 'sellvalue' in field_decimal_values and 'buyvalue' in field_decimal_values and 'profit' in field_decimal_values and 'loss' in field_decimal_values:
-                        if field_decimal_values['sellvalue'] - field_decimal_values['buyvalue'] != field_decimal_values['profit'] - field_decimal_values['loss']:
-                            errors.append(f"Inconsistent values: (sellvalue - buyvalue) is not equal to (profit - loss) at line {row_num} in {file_path}")
+                    if (sellvalue - buyvalue) != (profit - loss):
+                        errors.append(f"Inconsistent values: (sellvalue - buyvalue) is not equal to (profit - loss) at line {row_num} in {file_path}")
 
                     # Add a separator between error messages for different lines
                     # Check if the last message is a duplicate and skip adding it

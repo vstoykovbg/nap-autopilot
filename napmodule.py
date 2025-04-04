@@ -2043,10 +2043,6 @@ def validate_csv_files_sales(files):
                     ):
                         errors.append(f"Buyvalue is greater than sellvalue, but loss is not positive at line {row_num} in {file_path}")
 
-
-                    if profit > 0 and sellvalue > 0 and buyvalue > sellvalue:
-                        errors.append(f"Profit is positive and sellvalue is positive but buyvalue is greater than sellvalue at line {row_num} in {file_path}")
-
                     # New validation rule: (sellvalue - buyvalue) should be equal to (profit - loss)
                     if (sellvalue - buyvalue) != (profit - loss):
                         errors.append(f"Inconsistent values: (sellvalue - buyvalue) is not equal to (profit - loss) at line {row_num} in {file_path}")

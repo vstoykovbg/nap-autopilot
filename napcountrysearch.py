@@ -17,7 +17,7 @@ valid_country_data_short = {
     'Хонконг': ['HK', 'HKG', 'Hong Kong Special Administrative Region', 'Hong Kong', "Honk Konk", "Хонконг", "Хонг Конг", "Хонг Конк", "Хонконк"],
     'Израел': ['IL', 'ISR', 'State of Israel', 'Israel'],
     'Русия': ['RU', 'RUS', 'Russian Federation','Russia','Руска федерация','Мордор','Московия'],
-    'Китай': ['CN', 'CHN', 'People\'s Republic of China', 'PRC', 'Китай','Република Китай', 'Народна република Китай', 'Китайска народна република'],
+    'Китай': ['CN', 'CHN', 'People\'s Republic of China', 'PRC', 'Китай','Република Китай', 'Народна република Китай', 'Китайска народна република', 'China'],
     'Япония': ['JP', 'JPN', 'Japan'],
     'Франция': ['FR', 'FRA', 'French Republic', 'France'],
     'Германия': ['DE', 'DEU', 'Federal Republic of Germany', 'Germany', "Република Германия", "Федерална република Германия"],

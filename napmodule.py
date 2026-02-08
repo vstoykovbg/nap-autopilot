@@ -194,14 +194,16 @@ def get_supplement_id(supplement_number):
   if isinstance(supplement_number, int):
     if 1 <= supplement_number <= 13:
       # return f"part_{1159 + supplement_number}" # през 2024 година работеше
-      return f"part_{1224 + supplement_number}" # корекция за 2025 година
+      # return f"part_{1224 + supplement_number}" # корекция за 2025 година
+      return f"part_{1299 + supplement_number}" # корекция за 2026 година (ГДД за 2025 година)
     else:
       raise ValueError(f"Integer supplement number {supplement_number} is out of range (must be between 1 and 13)")
   elif isinstance(supplement_number, str):
     if supplement_number.upper() in ["III", "IV", "V"]:
       roman_to_int = {"III": 3, "IV": 4, "V": 5}
       # return f"part_{1154 + roman_to_int[supplement_number.upper()]}"  # през 2024 година работеше
-      return f"part_{1219 + roman_to_int[supplement_number.upper()]}"  # през 2024 година работеше
+      # return f"part_{1219 + roman_to_int[supplement_number.upper()]}"  # корекция за 2025 година
+      return f"part_{1294 + roman_to_int[supplement_number.upper()]}"  # корекция за 2026 година (ГДД за 2025 година)
     else:
       raise ValueError(f"Roman numeral supplement number '{supplement_number}' is invalid (must be one of 'III', 'IV', or 'V')")
   else:
@@ -2388,7 +2390,7 @@ def we_are_somewhere_in_the_yearly_declaration(driver):
         WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.ID, 'atdec_instructions')) and
             EC.presence_of_element_located((By.ID, 'decContainer')) and
-            EC.presence_of_element_located((By.ID, 'part_1221'))
+            EC.presence_of_element_located((By.ID, 'part_1299')) # корекция за 2026 година (ГДД за 2025 година)
         )
         return True
     except TimeoutException:

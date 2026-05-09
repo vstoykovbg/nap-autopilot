@@ -387,6 +387,24 @@ def check_if_row_full_sales(driver, row_id):
         return True
 
 
+def check_if_row_full_interest_dtt(driver, row_id):
+    # Function to check if a row is already filled with meaningful data for the interest-dtt table
+    try:
+        country_input = driver.find_element(By.ID, f"{row_id}_country")
+        col4_input = driver.find_element(By.ID, f"{row_id}_col4")
+
+        country_value = country_input.get_attribute("value")
+        col4_value = col4_input.get_attribute("value")
+
+        if (country_value and country_value.strip()) or \
+           (col4_value and col4_value.strip() and col4_value != "0.00"):
+            return True
+        else:
+            return False
+    except NoSuchElementException:
+        return True
+
+
 def fill_income_code_v1(driver, row_id, income_code):
     # Function to select the income code from the dropdown menu
     try:
@@ -1052,6 +1070,8 @@ def create_row(driver, table_type):
             add_button_id = "A8D5"
         elif table_type == "sales":
             add_button_id = "A5D2"
+        elif table_type == "interest_dtt":
+            add_button_id = "A9D2"
         else:
             print("Error: Invalid table type.")
             return
@@ -1233,6 +1253,69 @@ def fill_input(driver, element_id, value, input_type="string", retry_attempts=20
             print(f"Error in fill_input: {e}")
             time.sleep(1)
     
+    return False
+
+
+def fill_input_by_name(driver, field_name, value, input_type="numerical", retry_attempts=20):
+    """Variant of fill_input that locates the input field by its name= attribute instead of id=.
+
+    All other applications (5, 8, 9) use dynamically generated row IDs following the
+    pattern A{app}D{table}:{row}_{field}, so every field has a unique id= attribute and
+    fill_input (which uses By.ID via wait_for_input_field) works fine for them.
+
+    Application 6 is different: it has no table rows at all — it is just two plain fixed
+    inputs on the page for the total income amounts. The NRA portal assigns these fields
+    only a name= attribute (dec50_app6_sum603 and dec50_app6_sum606) with no id= attribute,
+    so fill_input would silently time out and fail. This function uses By.NAME instead."""
+    global slow_global
+    attempt = 0
+    while True:
+        attempt += 1
+        print(f"DEBUG: fill_input_by_name: attempt: \"{attempt}\", field_name: \"{field_name}\", value: \"{value}\"")
+        try:
+            input_field = WebDriverWait(driver, 10).until(
+                EC.visibility_of_element_located((By.NAME, field_name))
+            )
+        except TimeoutException:
+            print(f"Error: fill_input_by_name: field '{field_name}' not visible within timeout.")
+            if attempt > retry_attempts:
+                press_enter_to_continue()
+            time.sleep(1)
+            continue
+        except Exception as e:
+            print(f"Error in fill_input_by_name (locating '{field_name}'): {e}")
+            time.sleep(1)
+            continue
+
+        current_value = input_field.get_attribute("value")
+        if input_type == "numerical":
+            if mathematically_equal(value, current_value):
+                print(f"fill_input_by_name: value '{value}' already set in '{field_name}'.")
+                return True
+        elif input_type == "string":
+            if current_value == str(value):
+                print(f"fill_input_by_name: value '{value}' already set in '{field_name}'.")
+                return True
+
+        if attempt > retry_attempts:
+            print(f"fill_input_by_name: All {retry_attempts} attempts failed for '{field_name}'.")
+            press_enter_to_continue()
+
+        try:
+            driver.execute_script("arguments[0].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });", input_field)
+            time.sleep(0.1)
+            if slow_global:
+                time.sleep(0.5)
+            driver.execute_script("arguments[0].value = arguments[1];", input_field, value)
+            ActionChains(driver).click(input_field).perform()
+            ActionChains(driver).send_keys(Keys.TAB).perform()
+            time.sleep(0.2)
+            if slow_global:
+                time.sleep(0.3)
+        except Exception as e:
+            print(f"Error in fill_input_by_name (filling '{field_name}'): {e}")
+            time.sleep(1)
+
     return False
 
 
@@ -1800,6 +1883,84 @@ def process_csv_data_sales(driver, csv_file, sales_code="508"):
                 row_id += 1  # Move to the next row if current row is full
 
 
+def process_csv_data_interest(driver, csv_file):
+    """Fill Application 6 (interest income) from interest.csv.
+    Fields are fixed named inputs: dec50_app6_sum603 and dec50_app6_sum606.
+    """
+    with open(csv_file, newline='', encoding='utf-8') as csvfile:
+        csvreader = csv.DictReader(csvfile)
+        for row_data in csvreader:
+            income_code = row_data.get("income_code", "").strip()
+            income_base = row_data.get("income_base", "").strip()
+
+            if not income_code or not income_base:
+                print("process_csv_data_interest: No income_code or income_base, skipping line.")
+                continue
+
+            field_name = f"dec50_app6_sum{income_code}"
+            rounded_income_base = round_value(income_base, 2, field_name)
+            fill_input_by_name(driver, field_name, rounded_income_base, "numerical")
+
+
+def process_csv_data_interest_dtt(driver, csv_file):
+    """Fill Application 9 Part II (interest DTT) from interest-dtt.csv.
+    Columns filled per row:
+      _country        -> country dropdown
+      _incometype     -> income code dropdown (always value from csv, e.g. 603)
+      _col4           -> gross_amount_base
+      _col8/_col9/_col10 -> tax_base (Platен данък / Допустим кредит / Признат кредит)
+    """
+    with open(csv_file, newline='', encoding='utf-8') as csvfile:
+        csvreader = csv.DictReader(csvfile)
+        retry = 0
+        for row_data in csvreader:
+            row_id = 1  # Start with row_id 1
+
+            gross_value = row_data.get("gross_amount_base")
+            if gross_value is None or not gross_value.strip():
+                print("process_csv_data_interest_dtt: No gross_amount_base, skipping line.")
+                continue
+
+            while True:
+                current_row_id = f"A9D2:{row_id}"
+
+                if not check_if_row_exists(driver, current_row_id):
+                    if not create_row(driver, "interest_dtt"):
+                        print("Error in process_csv_data_interest_dtt: Error creating row.")
+                        retry += 1
+                        if retry > 5:
+                            time.sleep(10)
+                        if retry > 20:
+                            press_enter_to_continue()
+                        time.sleep(5)
+
+                if not check_if_row_full_interest_dtt(driver, current_row_id):
+                    country_value = row_data.get("country", "")
+                    income_code = row_data.get("income_code", "603").strip()
+                    tax_value = row_data.get("tax_base", "0").strip()
+
+                    select_country(driver, current_row_id, country_value)
+
+                    fill_dropdown_menu(driver, f"{current_row_id}_incometype", income_code)
+                    # Close the income-type help dialog if it appears (only on first row)
+                    if row_id == 1:
+                        click_the_close_button(driver, 0.5)
+
+                    rounded_gross = round_value(gross_value.strip(), 2, "gross_amount_base")
+                    fill_input(driver, f"{current_row_id}_col4", rounded_gross, "numerical")
+
+                    rounded_tax = round_value(tax_value, 2, "tax_base")
+                    # col8: Платен данък в чужбина
+                    fill_input(driver, f"{current_row_id}_col8", rounded_tax, "numerical")
+                    # col9: Допустим размер на данъчния кредит
+                    fill_input(driver, f"{current_row_id}_col9", rounded_tax, "numerical")
+                    # col10: Размер на признатия данъчен кредит
+                    fill_input(driver, f"{current_row_id}_col10", rounded_tax, "numerical")
+
+                    break  # Exit loop after filling data
+
+                row_id += 1  # Move to the next row if current row is full
+
 
 def categorize_csv_files(directory):
     """
@@ -1822,6 +1983,8 @@ def categorize_csv_files(directory):
     dividends_files = {}
     sales_files = {}
     crypto_files = {}
+    interest_files = {}
+    interest_dtt_files = {}
     other_files = {}
 
     # Iterate through files in the directory
@@ -1842,8 +2005,12 @@ def categorize_csv_files(directory):
                             shares_files[filename] = file_path
                         else:
                             stocks_files[filename] = file_path
+                    elif "country" in headers and "income_code" in headers and "gross_amount_base" in headers and "tax_base" in headers:
+                        interest_dtt_files[filename] = file_path
                     elif "name" in headers and "country" in headers and "sum" in headers:
                         dividends_files[filename] = file_path
+                    elif "income_code" in headers and "income_base" in headers:
+                        interest_files[filename] = file_path
                     elif "sellvalue" in headers and "buyvalue" in headers and "profit" in headers and "loss" in headers:
                     
                         filename = os.path.basename(file_path)
@@ -1857,7 +2024,7 @@ def categorize_csv_files(directory):
                 else: # a file without header is also considered other
                     other_files[filename] = file_path
                 
-    return shares_files, stocks_files, dividends_files, sales_files, crypto_files, other_files
+    return shares_files, stocks_files, dividends_files, sales_files, crypto_files, interest_files, interest_dtt_files, other_files
 
 
 
@@ -1884,7 +2051,7 @@ def validate_csv_files(directory):
     """
     try:
         # Categorize the CSV files
-        shares, stocks, dividends, sales, crypto, other = categorize_csv_files(directory)
+        shares, stocks, dividends, sales, crypto, interest, interest_dtt, other = categorize_csv_files(directory)
 
         print("DEBUG: all found files from categorize_csv_files(directory):")
         print("shares:", shares)
@@ -1892,11 +2059,13 @@ def validate_csv_files(directory):
         print("dividends:", dividends)
         print("sales:", sales)
         print("crypto:", crypto)
+        print("interest:", interest)
+        print("interest_dtt:", interest_dtt)
         print("other:", other)
 
         errors = []
 
-        if not any([shares, stocks, dividends, sales, crypto]):
+        if not any([shares, stocks, dividends, sales, crypto, interest, interest_dtt]):
             errors.append("No useful CSV files found in the directory.")
         else:
 
@@ -1922,6 +2091,18 @@ def validate_csv_files(directory):
                 errors.extend(validate_csv_files_sales(crypto))
                 if len(crypto) > 1:
                     errors.append("More than one CSV file with crypto sales data found in the directory.")
+
+            # Validate interest CSV files if they exist
+            if interest:
+                errors.extend(validate_csv_files_interest(interest))
+                if len(interest) > 1:
+                    errors.append("More than one CSV file with interest data found in the directory.")
+
+            # Validate interest-dtt CSV files if they exist
+            if interest_dtt:
+                errors.extend(validate_csv_files_interest_dtt(interest_dtt))
+                if len(interest_dtt) > 1:
+                    errors.append("More than one CSV file with interest-dtt data found in the directory.")
 
 
         # Check if other files are present
@@ -2152,9 +2333,90 @@ def validate_csv_files_dividends(files):
     return errors
 
 
+def validate_csv_files_interest(files):
+    errors = []
+    try:
+        for file_name, file_path in files.items():
+            print(f"Validating {file_path}")
+            with open(file_path, "r", encoding="utf-8") as csv_file:
+                csv_reader = csv.DictReader(csv_file)
+                required_headers = ["income_code", "income_base"]
+                headers = csv_reader.fieldnames
+                missing_headers = [h for h in required_headers if h not in headers]
+                if missing_headers:
+                    errors.append(f"Missing headers: {', '.join(missing_headers)} in {file_path}")
+                    continue
+                for row_num, row in enumerate(csv_reader, start=1):
+                    income_code = row.get("income_code", "").strip()
+                    if income_code not in ("603", "606"):
+                        errors.append(
+                            f"Invalid income_code '{income_code}' at line {row_num} in {file_path}"
+                            " (expected 603 or 606)"
+                        )
+                    income_base = row.get("income_base")
+                    if income_base is not None:
+                        try:
+                            val = Decimal(income_base)
+                            if val < 0:
+                                errors.append(f"Negative income_base at line {row_num} in {file_path}")
+                            if not check_digits_after_decimal_point(val):
+                                errors.append(
+                                    f"income_base has more than 2 decimal places"
+                                    f" at line {row_num} in {file_path}"
+                                )
+                        except DecimalException:
+                            errors.append(
+                                f"Invalid income_base value '{income_base}'"
+                                f" at line {row_num} in {file_path}"
+                            )
+    except Exception as e:
+        errors.append(f"Error while validating interest CSV files: {e}")
+    return errors
 
 
-
+def validate_csv_files_interest_dtt(files):
+    errors = []
+    try:
+        for file_name, file_path in files.items():
+            print(f"Validating {file_path}")
+            with open(file_path, "r", encoding="utf-8") as csv_file:
+                csv_reader = csv.DictReader(csv_file)
+                required_headers = ["country", "income_code", "gross_amount_base", "tax_base"]
+                headers = csv_reader.fieldnames
+                missing_headers = [h for h in required_headers if h not in headers]
+                if missing_headers:
+                    errors.append(f"Missing headers: {', '.join(missing_headers)} in {file_path}")
+                    continue
+                for row_num, row in enumerate(csv_reader, start=1):
+                    country = row.get("country", "").strip()
+                    if country and get_country(country) is None:
+                        errors.append(f"Invalid country '{country}' at line {row_num} in {file_path}")
+                    income_code = row.get("income_code", "").strip()
+                    if income_code not in ("603", "606"):
+                        errors.append(
+                            f"Invalid income_code '{income_code}' at line {row_num} in {file_path}"
+                            " (expected 603 or 606)"
+                        )
+                    for field in ["gross_amount_base", "tax_base"]:
+                        val_str = row.get(field)
+                        if val_str is not None:
+                            try:
+                                val = Decimal(val_str)
+                                if val < 0:
+                                    errors.append(f"Negative {field} at line {row_num} in {file_path}")
+                                if not check_digits_after_decimal_point(val):
+                                    errors.append(
+                                        f"{field} has more than 2 decimal places"
+                                        f" at line {row_num} in {file_path}"
+                                    )
+                            except DecimalException:
+                                errors.append(
+                                    f"Invalid {field} value '{val_str}'"
+                                    f" at line {row_num} in {file_path}"
+                                )
+    except Exception as e:
+        errors.append(f"Error while validating interest-dtt CSV files: {e}")
+    return errors
 
 
 def validate_csv_files_shares_and_stocks(files):
@@ -2737,7 +2999,7 @@ def too_many_attempts_press_enter():
 
 def enable_supplement_and_go_with_retries(driver, supplement_number):
 
-    if supplement_number not in [5, 8]:
+    if supplement_number not in [5, 6, 8, 9]:
         raise ValueError("Error in enable_supplement_and_go_with_retries - wrong supplement number.")
 
     retries=0
@@ -2788,6 +3050,12 @@ def navigate_and_process(driver, file_path, category):
     elif category == "crypto":
         enable_supplement_and_go_with_retries(driver, 5)
         process_csv_data_sales(driver, file_path, sales_code="5082")
+    elif category == "interest":
+        enable_supplement_and_go_with_retries(driver, 6)
+        process_csv_data_interest(driver, file_path)
+    elif category == "interest_dtt":
+        enable_supplement_and_go_with_retries(driver, 9)
+        process_csv_data_interest_dtt(driver, file_path)
     else:
         raise("Error in navigate_and_process: Invalid category.")
 
@@ -2929,7 +3197,7 @@ def autopilot(mode="fast",browser="firefox"):
 
 
     # Categorize the CSV files
-    shares, stocks, dividends, sales, crypto, other = categorize_csv_files(directory)
+    shares, stocks, dividends, sales, crypto, interest, interest_dtt, other = categorize_csv_files(directory)
 
     print("DEBUG: all found files from categorize_csv_files(directory):")
     print("shares:", shares)
@@ -2937,6 +3205,8 @@ def autopilot(mode="fast",browser="firefox"):
     print("dividends:", dividends)
     print("sales:", sales)
     print("crypto:", crypto)
+    print("interest:", interest)
+    print("interest_dtt:", interest_dtt)
     print("other:", other)
 
 
@@ -3000,6 +3270,32 @@ def autopilot(mode="fast",browser="firefox"):
     except Exception as e:
         print(f"An error occurred while processing crypto sales: {e}")
         print("Грешка при обработка на информацията за продажбите на криптовалути.")
+        press_enter_to_continue()
+
+    check_bad_request_increase()
+
+    # process interest (Application 6)
+    try:
+        for file_name, file_path in interest.items():
+            print(f"Processing {file_path}")
+            navigate_and_process(driver, file_path, "interest")
+
+    except Exception as e:
+        print(f"An error occurred while processing interest: {e}")
+        print("Грешка при обработка на информацията за лихвите.")
+        press_enter_to_continue()
+
+    check_bad_request_increase()
+
+    # process interest-dtt (Application 9)
+    try:
+        for file_name, file_path in interest_dtt.items():
+            print(f"Processing {file_path}")
+            navigate_and_process(driver, file_path, "interest_dtt")
+
+    except Exception as e:
+        print(f"An error occurred while processing interest-dtt: {e}")
+        print("Грешка при обработка на информацията за избягване на двойно данъчното облагане (СИДДО)")
         press_enter_to_continue()
 
 
